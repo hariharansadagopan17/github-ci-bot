@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub CI/CD Bot Test Interface</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #24292e;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .chat-container {
+            border: 1px solid #e1e4e8;
+            border-radius: 6px;
+            height: 400px;
+            overflow-y: auto;
+            padding: 15px;
+            background: #fafbfc;
+            margin-bottom: 20px;
+        }
+        .message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 6px;
+        }
+        .user-message {
+            background: #0366d6;
+            color: white;
+            margin-left: 20%;
+        }
+        .bot-message {
+            background: #f1f8ff;
+            border: 1px solid #c8e1ff;
+            margin-right: 20%;
+        }
+        .input-container {
+            display: flex;
+            gap: 10px;
+        }
+        input[type="text"] {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #d0d7de;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        button {
+            padding: 12px 20px;
+            background: #0366d6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #0256cc;
+        }
+        button:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+        }
+        .status {
+            text-align: center;
+            margin: 10px 0;
+            font-size: 14px;
+            color: #666;
+        }
+        .examples {
+            margin-top: 20px;
+            padding: 15px;
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 6px;
+        }
+        .examples h3 {
+            margin-top: 0;
+            color: #856404;
+        }
+        .example {
+            display: inline-block;
+            background: white;
+            padding: 5px 10px;
+            margin: 3px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            border: 1px solid #ddd;
+        }
+        .example:hover {
+            background: #f8f9fa;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 GitHub CI/CD Bot Test Interface</h1>
+        
+        <div class="status" id="status">Ready to chat!</div>
+        
+        <div class="chat-container" id="chatContainer">
+            <div class="message bot-message">
+                <strong>Bot:</strong> Hi! I'm your GitHub CI/CD assistant. I can help you manage pipelines, check status, trigger releases, and analyze failures. What would you like to do?
+            </div>
+        </div>
+        
+        <div class="input-container">
+            <input type="text" id="messageInput" placeholder="Type your message here..." />
+            <button onclick="sendMessage()" id="sendButton">Send</button>
+        </div>
+        
+        <div class="examples">
+            <h3>Try these examples:</h3>
+            <div class="example" onclick="setMessage('Check status of octocat/Hello-World')">Check status of octocat/Hello-World</div>
+            <div class="example" onclick="setMessage('Trigger release for myuser/myproject')">Trigger release for myuser/myproject</div>
+            <div class="example" onclick="setMessage('Show history for facebook/react')">Show history for facebook/react</div>
+            <div class="example" onclick="setMessage('Analyze failures in microsoft/vscode')">Analyze failures in microsoft/vscode</div>
+            <div class="example" onclick="setMessage('Help')">Help</div>
+        </div>
+    </div>
+
+    <script>
+        const chatContainer = document.getElementById('chatContainer');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const status = document.getElementById('status');
+
+        // Bot server URL - change this to your deployed URL
+        const BOT_URL = 'http://localhost:3000';
+
+        function addMessage(message, isUser = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user-message' : 'bot-message'}`;
+            messageDiv.innerHTML = `<strong>${isUser ? 'You' : 'Bot'}:</strong> ${message.replace(/\n/g, '<br>')}`;
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function setStatus(text) {
+            status.textContent = text;
+        }
+
+        function setMessage(message) {
+            messageInput.value = message;
+            messageInput.focus();
+        }
+
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            // Disable input while processing
+            sendButton.disabled = true;
+            messageInput.disabled = true;
+            setStatus('Sending message...');
+
+            // Add user message to chat
+            addMessage(message, true);
+            messageInput.value = '';
+
+            try {
+                const response = await fetch(`${BOT_URL}/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        userId: 'test-user'
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                addMessage(data.response);
+                setStatus('Ready to chat!');
+
+            } catch (error) {
+                console.error('Error:', error);
+                addMessage(`❌ Error: ${error.message}. Make sure the bot server is running on ${BOT_URL}`, false);
+                setStatus('Error occurred');
+            }
+
+            // Re-enable input
+            sendButton.disabled = false;
+            messageInput.disabled = false;
+            messageInput.focus();
+        }
+
+        // Handle Enter key in input
+        messageInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !sendButton.disabled) {
+                sendMessage();
+            }
+        });
+
+        // Test connection on load
+        window.addEventListener('load', async function() {
+            try {
+                const response = await fetch(`${BOT_URL}/health`);
+                if (response.ok) {
+                    setStatus('✅ Connected to bot server');
+                } else {
+                    setStatus('⚠️ Bot server not responding');
+                }
+            } catch (error) {
+                setStatus(`❌ Cannot connect to bot server at ${BOT_URL}`);
+            }
+        });
+
+        // Focus input on load
+        messageInput.focus();
+    </script>
+</body>
+</html>
