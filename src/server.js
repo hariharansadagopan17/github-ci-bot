@@ -127,10 +127,27 @@ class Server {
         this.app.get('/status/:owner/:repo', async (req, res) => {
             try {
                 const { owner, repo } = req.params;
-                const status = await this.bot.getRepositoryStatus(owner, repo);
+                
+                // First, fetch the workflow ID
+                const workflows = await this.bot.octokit.rest.actions.listRepoWorkflows({
+                    owner,
+                    repo
+                });
+
+                if (!workflows.data.workflows.length) {
+                    return res.status(404).json({ error: 'No workflows found in repository' });
+                }
+
+                // Use the first workflow ID (you might want to make this configurable)
+                const workflowId = workflows.data.workflows[0].id;
+                
+                const status = await this.bot.getRepositoryStatus(owner, repo, workflowId);
                 res.json(status);
             } catch (error) {
                 console.error('Status error:', error);
+                if (error.status === 404) {
+                    return res.status(404).json({ error: 'Repository or workflow not found' });
+                }
                 res.status(500).json({ error: 'Failed to get status' });
             }
         });
@@ -140,10 +157,25 @@ class Server {
             try {
                 const { owner, repo } = req.params;
                 const { artifactId, branch = 'main' } = req.body;
-                const result = await this.bot.triggerPipeline(owner, repo, branch, artifactId);
+                
+                // Get workflow ID first
+                const workflows = await this.bot.octokit.rest.actions.listRepoWorkflows({
+                    owner,
+                    repo
+                });
+
+                if (!workflows.data.workflows.length) {
+                    return res.status(404).json({ error: 'No workflows found in repository' });
+                }
+
+                const workflowId = workflows.data.workflows[0].id;
+                const result = await this.bot.triggerPipeline(owner, repo, branch, workflowId, artifactId);
                 res.json(result);
             } catch (error) {
                 console.error('Trigger error:', error);
+                if (error.status === 404) {
+                    return res.status(404).json({ error: 'Repository or workflow not found' });
+                }
                 res.status(500).json({ error: 'Failed to trigger pipeline' });
             }
         });
