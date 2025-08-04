@@ -203,7 +203,6 @@ class ChatInterface {
   // Handle pipeline history requests
   async handleHistoryRequest(intent, session) {
     if (!intent.repository) {
-      // Use last repository from context if available
       if (session.context.lastRepository) {
         intent.repository = session.context.lastRepository;
       } else {
@@ -217,26 +216,44 @@ class ChatInterface {
         intent.repository.name
       );
 
-      let response = `📈 **Pipeline History for ${status.repository}**\n\n`;
-      
-      if (status.recent_runs.length === 0) {
-        response += "No workflow runs found.";
-      } else {
-        status.recent_runs.forEach((run, index) => {
-          const statusEmoji = this.getStatusEmoji(run.status, run.conclusion);
-          const duration = this.calculateDuration(run.created_at, run.updated_at);
-          const timeAgo = this.getTimeAgo(new Date(run.created_at));
-          
-          response += `**${index + 1}. ${run.name}**\n`;
-          response += `   ${statusEmoji} Status: ${run.conclusion || run.status}\n`;
-          response += `   ⏱️ Duration: ${duration}\n`;
-          response += `   📅 Started: ${timeAgo}\n`;
-          response += `   🔗 [View Details](${run.html_url})\n\n`;
-        });
+      if (!status || !status.workflows) {
+        return `❌ No workflow information available for ${intent.repository.owner}/${intent.repository.name}`;
       }
+
+      let response = `📈 **Pipeline History for ${intent.repository.owner}/${intent.repository.name}**\n\n`;
+      
+      if (status.workflows.length === 0) {
+        return response + "No workflows found in this repository.";
+      }
+
+      // Process each workflow
+      status.workflows.forEach(workflow => {
+        response += `\n**Workflow: ${workflow.workflow_name || 'Unnamed'}**\n`;
+        
+        if (!workflow.recent_runs || workflow.recent_runs.length === 0) {
+          response += "No recent runs found.\n";
+          return;
+        }
+
+        workflow.recent_runs.forEach((run, index) => {
+          const statusEmoji = this.getStatusEmoji(run.status, run.conclusion);
+          const duration = this.calculateDuration(run.created_at || new Date(), run.updated_at || new Date());
+          const timeAgo = this.getTimeAgo(new Date(run.created_at || new Date()));
+          
+          response += `${index + 1}. ${statusEmoji} **${run.name || 'Unnamed run'}**\n`;
+          response += `   Status: ${run.conclusion || run.status || 'Unknown'}\n`;
+          response += `   Duration: ${duration}\n`;
+          response += `   Started: ${timeAgo}\n`;
+          if (run.html_url) {
+            response += `   [View Details](${run.html_url})\n`;
+          }
+          response += '\n';
+        });
+      });
 
       return response;
     } catch (error) {
+      console.error('History error:', error);
       return `❌ Failed to get pipeline history: ${error.message}`;
     }
   }
@@ -257,8 +274,20 @@ class ChatInterface {
         intent.repository.name
       );
 
-      // Find the most recent failed run
-      const failedRun = status.recent_runs.find(run => run.conclusion === 'failure');
+      if (!status || !status.workflows) {
+        return `❌ No workflow information available for ${intent.repository.owner}/${intent.repository.name}`;
+      }
+
+      // Find the most recent failed run across all workflows
+      let failedRun = null;
+      status.workflows.forEach(workflow => {
+        if (workflow.recent_runs && workflow.recent_runs.length > 0) {
+          const failed = workflow.recent_runs.find(run => run.conclusion === 'failure');
+          if (failed && (!failedRun || new Date(failed.created_at) > new Date(failedRun.created_at))) {
+            failedRun = failed;
+          }
+        }
+      });
       
       if (!failedRun) {
         return `✅ No recent failures found for ${intent.repository.owner}/${intent.repository.name}`;
@@ -304,6 +333,7 @@ class ChatInterface {
 
       return response;
     } catch (error) {
+      console.error('Failure analysis error:', error);
       return `❌ Failed to analyze failures: ${error.message}`;
     }
   }
