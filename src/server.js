@@ -128,20 +128,38 @@ class Server {
             try {
                 const { owner, repo } = req.params;
                 
-                // First, fetch the workflow ID
-                const workflows = await this.bot.octokit.rest.actions.listRepoWorkflows({
-                    owner,
-                    repo
-                });
-
-                if (!workflows.data.workflows.length) {
-                    return res.status(404).json({ error: 'No workflows found in repository' });
+                // Add error handling for workflow fetch
+                let workflows;
+                try {
+                    workflows = await this.bot.octokit.rest.actions.listRepoWorkflows({
+                        owner,
+                        repo
+                    });
+                } catch (error) {
+                    console.error('Failed to fetch workflows:', error);
+                    return res.status(404).json({ 
+                        error: 'Failed to fetch workflows',
+                        details: error.message 
+                    });
                 }
 
-                // Use the first workflow ID
+                // Validate workflows data
+                if (!workflows?.data?.workflows) {
+                    return res.status(404).json({ 
+                        error: 'No workflows data available',
+                        repository: `${owner}/${repo}`
+                    });
+                }
+
+                if (workflows.data.workflows.length === 0) {
+                    return res.status(404).json({ 
+                        error: 'No workflows found in repository',
+                        repository: `${owner}/${repo}`
+                    });
+                }
+
+                // Get the first workflow and fetch its runs
                 const workflowId = workflows.data.workflows[0].id;
-                
-                // Fetch workflow runs with the correct workflow ID
                 const runs = await this.bot.octokit.rest.actions.listWorkflowRuns({
                     owner,
                     repo,
@@ -150,16 +168,18 @@ class Server {
                 });
 
                 res.json({
+                    repository: `${owner}/${repo}`,
                     workflowId,
-                    runs: runs.data.workflow_runs,
-                    total_count: runs.data.total_count
+                    workflowName: workflows.data.workflows[0].name,
+                    runs: runs.data.workflow_runs || [],
+                    total_count: runs.data.total_count || 0
                 });
             } catch (error) {
                 console.error('Status error:', error);
-                if (error.status === 404) {
-                    return res.status(404).json({ error: 'Repository or workflow not found' });
-                }
-                res.status(500).json({ error: 'Failed to get status' });
+                res.status(500).json({ 
+                    error: 'Failed to get status',
+                    details: error.message
+                });
             }
         });
 
@@ -169,14 +189,34 @@ class Server {
                 const { owner, repo } = req.params;
                 const { artifactId, branch = 'main' } = req.body;
                 
-                // Get workflow ID first
-                const workflows = await this.bot.octokit.rest.actions.listRepoWorkflows({
-                    owner,
-                    repo
-                });
+                // Add error handling for workflow fetch
+                let workflows;
+                try {
+                    workflows = await this.bot.octokit.rest.actions.listRepoWorkflows({
+                        owner,
+                        repo
+                    });
+                } catch (error) {
+                    console.error('Failed to fetch workflows:', error);
+                    return res.status(404).json({ 
+                        error: 'Failed to fetch workflows',
+                        details: error.message 
+                    });
+                }
 
-                if (!workflows.data.workflows.length) {
-                    return res.status(404).json({ error: 'No workflows found in repository' });
+                // Validate workflows data
+                if (!workflows?.data?.workflows) {
+                    return res.status(404).json({ 
+                        error: 'No workflows data available',
+                        repository: `${owner}/${repo}`
+                    });
+                }
+
+                if (workflows.data.workflows.length === 0) {
+                    return res.status(404).json({ 
+                        error: 'No workflows found in repository',
+                        repository: `${owner}/${repo}`
+                    });
                 }
 
                 const workflowId = workflows.data.workflows[0].id;
@@ -184,10 +224,10 @@ class Server {
                 res.json(result);
             } catch (error) {
                 console.error('Trigger error:', error);
-                if (error.status === 404) {
-                    return res.status(404).json({ error: 'Repository or workflow not found' });
-                }
-                res.status(500).json({ error: 'Failed to trigger pipeline' });
+                res.status(500).json({ 
+                    error: 'Failed to trigger pipeline',
+                    details: error.message
+                });
             }
         });
     }

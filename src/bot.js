@@ -160,23 +160,49 @@ class GitHubBot {
 
     async getRepositoryStatus(owner, repo) {
         try {
-            const runs = await this.octokit.actions.listWorkflowRuns({
+            // First fetch workflows
+            const workflows = await this.octokit.actions.listRepoWorkflows({
                 owner,
-                repo,
-                per_page: 5
+                repo
             });
+
+            if (!workflows.data.workflows.length) {
+                return {
+                    repository: `${owner}/${repo}`,
+                    workflows: [],
+                    message: 'No workflows found in repository'
+                };
+            }
+
+            // Get runs for each workflow
+            const workflowsWithRuns = await Promise.all(
+                workflows.data.workflows.map(async (workflow) => {
+                    const runs = await this.octokit.actions.listWorkflowRuns({
+                        owner,
+                        repo,
+                        workflow_id: workflow.id,
+                        per_page: 5
+                    });
+
+                    return {
+                        workflow_id: workflow.id,
+                        workflow_name: workflow.name,
+                        recent_runs: runs.data.workflow_runs.map(run => ({
+                            id: run.id,
+                            name: run.name,
+                            status: run.status,
+                            conclusion: run.conclusion,
+                            created_at: run.created_at,
+                            updated_at: run.updated_at,
+                            html_url: run.html_url
+                        }))
+                    };
+                })
+            );
 
             return {
                 repository: `${owner}/${repo}`,
-                recent_runs: runs.data.workflow_runs.map(run => ({
-                    id: run.id,
-                    name: run.name,
-                    status: run.status,
-                    conclusion: run.conclusion,
-                    created_at: run.created_at,
-                    updated_at: run.updated_at,
-                    html_url: run.html_url
-                }))
+                workflows: workflowsWithRuns
             };
         } catch (error) {
             console.error('Status retrieval error:', error);
