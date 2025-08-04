@@ -130,8 +130,8 @@ class Server {
     }
 }
 
-
-// Start the serverconst server = new Server();
+// Start the server
+const server = new Server();
 server.start();
 
 export default Server;
