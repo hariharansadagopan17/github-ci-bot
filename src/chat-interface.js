@@ -318,7 +318,7 @@ class ChatInterface {
           });
         }
 
-        if (analysis.is_minor && analysis.confidence >= 7) {
+        if (analysis.is_minor && analysis.confidence >= 1) {
           response += `\n🔧 I can attempt to auto-fix this issue. Would you like me to try?`;
           session.context.pendingFix = {
             repository: intent.repository,
