@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import express from 'express';
+import crypto from 'crypto';
 import GitHubBot from './bot.js';
 import ChatInterface from './chat-interface.js';
 import PipelineResolver from './pipeline-resolver.js';
@@ -28,10 +29,35 @@ class Server {
         this.setupRoutes();
     }
 
+    verifyWebhookSignature(req, res, next) {
+        console.log('Headers:', req.headers);
+        const signature = req.headers['x-hub-signature-256'];
+        const payload = JSON.stringify(req.body);
+        const secret = process.env.GITHUB_WEBHOOK_SECRET;
+
+        if (!signature) {
+            return res.status(401).json({ error: 'No signature found' });
+        }
+
+        const computedSignature = `sha256=${crypto
+            .createHmac('sha256', secret)
+            .update(payload)
+            .digest('hex')}`;
+
+        if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(computedSignature))) {
+            return res.status(401).json({ error: 'Invalid signature' });
+        }
+
+        next();
+    }
+
     setupMiddleware() {
         this.app.use(express.json());
         this.app.use(express.urlencoded({ extended: true }));
         
+        // Add signature verification for webhook endpoint
+        this.app.use('/webhook', (req, res, next) => this.verifyWebhookSignature(req, res, next));
+
         // CORS for development
         this.app.use((req, res, next) => {
             res.header('Access-Control-Allow-Origin', '*');
@@ -104,8 +130,8 @@ class Server {
     }
 }
 
-// Start the server
-const server = new Server();
+
+// Start the serverconst server = new Server();
 server.start();
 
 export default Server;
