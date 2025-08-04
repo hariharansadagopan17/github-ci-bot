@@ -133,24 +133,39 @@ class ChatInterface {
         intent.repository.name
       );
 
-      let response = `📊 **Status for ${status.repository}**\n\n`;
+      if (!status) {
+        return `❌ No status information available for ${intent.repository.owner}/${intent.repository.name}`;
+      }
+
+      let response = `📊 **Status for ${status.repository || `${intent.repository.owner}/${intent.repository.name}`}**\n\n`;
       
-      if (status.recent_runs.length === 0) {
-        response += "No recent workflow runs found.";
-      } else {
-        response += "Recent workflow runs:\n";
-        status.recent_runs.forEach((run, index) => {
+      // Check if workflows exists and has data
+      if (!status.workflows || status.workflows.length === 0) {
+        return response + "No workflows found in this repository.";
+      }
+
+      response += "Recent workflow runs:\n";
+      status.workflows.forEach((workflow, wIndex) => {
+        response += `\n🔧 Workflow: ${workflow.workflow_name}\n`;
+        
+        if (!workflow.recent_runs || workflow.recent_runs.length === 0) {
+          response += "   No recent runs found.\n";
+          return;
+        }
+
+        workflow.recent_runs.forEach((run, index) => {
           const statusEmoji = this.getStatusEmoji(run.status, run.conclusion);
           const timeAgo = this.getTimeAgo(new Date(run.created_at));
-          response += `${index + 1}. ${statusEmoji} **${run.name}** - ${run.conclusion || run.status} (${timeAgo})\n`;
+          response += `   ${index + 1}. ${statusEmoji} **${run.name || 'Unnamed run'}** - ${run.conclusion || run.status || 'Unknown'} (${timeAgo})\n`;
         });
-      }
+      });
 
       // Store context for follow-up questions
       session.context.lastRepository = intent.repository;
 
       return response;
     } catch (error) {
+      console.error('Status check error:', error);
       return `❌ Failed to get status for ${intent.repository.owner}/${intent.repository.name}: ${error.message}`;
     }
   }
