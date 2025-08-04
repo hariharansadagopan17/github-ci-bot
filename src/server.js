@@ -138,11 +138,22 @@ class Server {
                     return res.status(404).json({ error: 'No workflows found in repository' });
                 }
 
-                // Use the first workflow ID (you might want to make this configurable)
+                // Use the first workflow ID
                 const workflowId = workflows.data.workflows[0].id;
                 
-                const status = await this.bot.getRepositoryStatus(owner, repo, workflowId);
-                res.json(status);
+                // Fetch workflow runs with the correct workflow ID
+                const runs = await this.bot.octokit.rest.actions.listWorkflowRuns({
+                    owner,
+                    repo,
+                    workflow_id: workflowId,
+                    per_page: 5
+                });
+
+                res.json({
+                    workflowId,
+                    runs: runs.data.workflow_runs,
+                    total_count: runs.data.total_count
+                });
             } catch (error) {
                 console.error('Status error:', error);
                 if (error.status === 404) {
