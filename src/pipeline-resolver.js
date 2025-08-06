@@ -9,13 +9,49 @@ class PipelineResolver {
         });
     }
 
+    // Preprocess logs to handle different formats and encodings
+    async preprocessLogs(logs) {
+        try {
+            // Check if the log is base64 encoded
+            const isBase64 = /^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$/.test(logs);
+            
+            if (isBase64) {
+                logs = Buffer.from(logs, 'base64').toString('utf8');
+            }
+
+            // Clean and format the logs
+            let cleanedLogs = logs
+                .replace(/[\x00-\x09\x0B-\x0C\x0E-\x1F\x7F-\x9F]/g, '') // Remove control characters
+                .replace(/^\s*[\r\n]/gm, '') // Remove empty lines
+                .split('\n')
+                .filter(line => {
+                    // Filter out binary-looking content and keep meaningful log lines
+                    return line.trim() && 
+                           !line.includes('[binary]') &&
+                           !/^\s*[^\x20-\x7E]+\s*$/.test(line); // Remove lines with only non-printable chars
+                })
+                .slice(-100) // Keep last 100 relevant lines
+                .join('\n');
+
+            return cleanedLogs || 'No readable log content found';
+        } catch (error) {
+            console.error('Log preprocessing error:', error);
+            return 'Error: Failed to process log content';
+        }
+    }
+
     // Analyze workflow failure using AI
     async analyzeFailure(logs, workflowName) {
         try {
+            // Preprocess the logs first
+            const processedLogs = await this.preprocessLogs(logs);
+
             const prompt = `
 You are an expert DevOps engineer analyzing a GitHub Actions workflow failure.
 
 Workflow Name: ${workflowName}
+
+Important: If the log content appears corrupted or unreadable, focus on identifying the format or encoding issues.
 
 Analyze this failure log and provide a JSON response with:
 1. "root_cause": Brief description of what went wrong
@@ -23,31 +59,46 @@ Analyze this failure log and provide a JSON response with:
 3. "fixes": Array of specific fix recommendations
 4. "commands": Array of commands that could resolve the issue
 5. "confidence": 1-10 scale of how confident you are in the analysis
+6. "log_quality": "good" | "partial" | "corrupted"
 
-Common auto-fixable issues include:
-- Dependency version conflicts
-- Missing environment variables
-- Cache issues
-- Temporary network failures
-- Test data problems
-- Configuration file formatting
-
-Log content (truncated):
-${logs.substring(0, 3000)}
-
-Respond only with valid JSON.
-`;
+Log content:
+${processedLogs}`;
 
             const response = await this.openai.chat.completions.create({
-                model: "gpt-4",
-                messages: [{ role: "user", content: prompt }],
+                model: "gpt-4.1",
+                messages: [{ 
+                    role: "system", 
+                    content: "You are a DevOps expert. Always respond with valid JSON only, no markdown formatting or explanations." 
+                },
+                { 
+                    role: "user", 
+                    content: prompt 
+                }],
                 temperature: 0.1,
-                max_tokens: 1000
+                max_tokens: 10000
             });
 
-            const analysis = JSON.parse(response.choices[0].message.content);
-            console.log('AI Analysis:', analysis);
+            let content = response.choices[0].message.content.trim();
+            const analysis = JSON.parse(content);
 
+            // If logs are corrupted, add specific fixes
+            if (analysis.log_quality === 'corrupted') {
+                analysis.fixes = [
+                    "Add error logging to workflow steps",
+                    "Enable debug logging in the workflow",
+                    "Add 'set -x' to shell steps",
+                    "Check workflow syntax for proper log capture",
+                    "Verify artifact handling steps"
+                ];
+                analysis.is_minor = true;
+                analysis.commands = [
+                    "echo '::debug::Step debugging enabled'",
+                    "set -x",
+                    "export ACTIONS_STEP_DEBUG=true"
+                ];
+            }
+
+            console.log('AI Analysis:', analysis);
             return analysis;
         } catch (error) {
             console.error('AI analysis error:', error);
@@ -265,11 +316,15 @@ Respond only with valid JSON.
                     headers: {
                         'Authorization': `token ${this.githubToken}`,
                         'Accept': 'application/vnd.github.v3+json'
-                    }
+                    },
+                    responseType: 'arraybuffer' // Handle binary response
                 }
             );
 
-            return response.data;
+            // Convert binary response to text
+            const textContent = Buffer.from(response.data).toString('utf8');
+            return textContent;
+
         } catch (error) {
             throw new Error(`Failed to fetch logs: ${error.message}`);
         }
