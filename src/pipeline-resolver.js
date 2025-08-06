@@ -12,28 +12,49 @@ class PipelineResolver {
     // Preprocess logs to handle different formats and encodings
     async preprocessLogs(logs) {
         try {
-            // Check if the log is base64 encoded
-            const isBase64 = /^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$/.test(logs);
+            // Handle different types of input
+            let processedLogs = '';
             
-            if (isBase64) {
-                logs = Buffer.from(logs, 'base64').toString('utf8');
+            // If logs is Buffer or ArrayBuffer, convert to string
+            if (logs instanceof Buffer || logs instanceof ArrayBuffer) {
+                processedLogs = Buffer.from(logs).toString('utf8');
+            } else if (typeof logs === 'string') {
+                processedLogs = logs;
+            } else {
+                return 'Error: Invalid log format';
             }
 
-            // Clean and format the logs
-            let cleanedLogs = logs
-                .replace(/[\x00-\x09\x0B-\x0C\x0E-\x1F\x7F-\x9F]/g, '') // Remove control characters
-                .replace(/^\s*[\r\n]/gm, '') // Remove empty lines
+            // Try different decodings if content looks encoded
+            if (/^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$/.test(processedLogs)) {
+                try {
+                    processedLogs = Buffer.from(processedLogs, 'base64').toString('utf8');
+                } catch (e) {
+                    console.log('Not valid base64, keeping original');
+                }
+            }
+
+            // Clean the logs
+            processedLogs = processedLogs
+                .replace(/[\x00-\x09\x0B-\x0C\x0E-\x1F]/g, '') // Remove control chars
+                .replace(/^\s*[\r\n]/gm, '')                     // Remove empty lines
                 .split('\n')
                 .filter(line => {
-                    // Filter out binary-looking content and keep meaningful log lines
+                    // Keep only readable text lines
                     return line.trim() && 
-                           !line.includes('[binary]') &&
-                           !/^\s*[^\x20-\x7E]+\s*$/.test(line); // Remove lines with only non-printable chars
+                           /[\x20-\x7E]/.test(line) &&          // Has printable chars
+                           !/^\s*[^\x20-\x7E\s]+\s*$/.test(line); // Not only special chars
                 })
-                .slice(-100) // Keep last 100 relevant lines
                 .join('\n');
 
-            return cleanedLogs || 'No readable log content found';
+            // Extract error messages and relevant content
+            const errorLines = processedLogs.split('\n').filter(line => 
+                line.toLowerCase().includes('error') ||
+                line.toLowerCase().includes('failed') ||
+                line.toLowerCase().includes('exception') ||
+                /^[a-zA-Z.]+Error:/.test(line)
+            );
+
+            return errorLines.length > 0 ? errorLines.join('\n') : processedLogs;
         } catch (error) {
             console.error('Log preprocessing error:', error);
             return 'Error: Failed to process log content';
@@ -315,17 +336,32 @@ ${processedLogs}`;
                 {
                     headers: {
                         'Authorization': `token ${this.githubToken}`,
-                        'Accept': 'application/vnd.github.v3+json'
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Accept-Encoding': 'gzip, deflate, br'
                     },
-                    responseType: 'arraybuffer' // Handle binary response
+                    responseType: 'arraybuffer',
+                    decompress: true
                 }
             );
 
-            // Convert binary response to text
-            const textContent = Buffer.from(response.data).toString('utf8');
-            return textContent;
+            // Try different encodings
+            const encodings = ['utf8', 'ascii', 'utf16le'];
+            let decodedContent = '';
 
+            for (const encoding of encodings) {
+                try {
+                    decodedContent = Buffer.from(response.data).toString(encoding);
+                    if (decodedContent && /[\x20-\x7E]/.test(decodedContent)) {
+                        break; // Found readable content
+                    }
+                } catch (e) {
+                    console.log(`Failed to decode with ${encoding}`);
+                }
+            }
+
+            return decodedContent || Buffer.from(response.data).toString('utf8');
         } catch (error) {
+            console.error('Log fetching error:', error);
             throw new Error(`Failed to fetch logs: ${error.message}`);
         }
     }

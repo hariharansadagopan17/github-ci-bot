@@ -127,7 +127,7 @@ jobs:
     - name: Download build artifact
       uses: actions/download-artifact@v4
       with:
-        name: release-$${{ needs.build.outputs.artifact_id }}
+        name: release-${{ needs.build.outputs.artifact_id }}
     
     - name: Extract artifact
       run: |
