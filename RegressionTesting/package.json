@@ -12,6 +12,9 @@
     "test:docker": "docker run --rm -v $(pwd):/app regression-test-framework",
     "test:runner": "node test-runner.js",
     "build:docker": "docker build -t regression-test-framework .",
+    "stream:logs": "node loki-log-streamer.js",
+    "test:automated": "node automated-regression-runner.js",
+    "test:live": "npm run test:automated",
     "install:dependencies": "npm install",
     "lint": "eslint . --ext .js",
     "lint:fix": "eslint . --ext .js --fix",
@@ -67,7 +70,8 @@
     "selenium-webdriver": "^4.15.0",
     "webdriver-manager": "^12.1.8",
     "winston": "^3.17.0",
-    "winston-elasticsearch": "^0.17.4"
+    "winston-elasticsearch": "^0.17.4",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",

@@ -1,5 +1,5 @@
 # Use Node.js LTS version with Chrome pre-installed
-FROM node:18-slim
+FROM node:20-slim
 
 # Set environment variables early
 ENV DEBIAN_FRONTEND=noninteractive
@@ -46,6 +46,7 @@ RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --d
 
 # Install ChromeDriver using npm (more reliable)
 RUN npm install -g chromedriver@119.0.1 \
+    && rm -f /usr/local/bin/chromedriver \
     && ln -s /usr/local/lib/node_modules/chromedriver/bin/chromedriver /usr/local/bin/chromedriver \
     && chmod +x /usr/local/bin/chromedriver
 
