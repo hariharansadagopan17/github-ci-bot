@@ -86,7 +86,7 @@ Write-Host "🎉 GitHub secrets setup completed successfully!" -ForegroundColor 
 Write-Host ""
 Write-Host "📝 Next steps:" -ForegroundColor Yellow
 Write-Host "1. Push any change to trigger the pipeline:" -ForegroundColor White
-Write-Host "   git add . && git commit -m 'feat: activate CI/CD pipeline' && git push" -ForegroundColor Cyan
+Write-Host "   git add . ; git commit -m 'feat: activate CI/CD pipeline' ; git push" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "2. Monitor the pipeline at:" -ForegroundColor White
 Write-Host "   https://github.com/$REPO_FULL/actions" -ForegroundColor Cyan
