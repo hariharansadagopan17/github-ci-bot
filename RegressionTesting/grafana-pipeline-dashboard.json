@@ -1,0 +1,121 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "CI/CD Pipeline Monitoring & Troubleshooting",
+    "tags": ["ci-cd", "pipeline", "troubleshooting"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Pipeline Status Overview",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum by (status) (pipeline_runs_total)",
+            "legendFormat": "{{status}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "red", "value": 1}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Recent Pipeline Failures",
+        "type": "logs",
+        "targets": [
+          {
+            "expr": "{job=\"pipeline-troubleshooter\"} |= \"failure\"",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Regression Test Execution Logs",
+        "type": "logs",
+        "targets": [
+          {
+            "expr": "{job=\"regression-tests\"} |= \"error\" or |= \"fail\" or |= \"ERROR\" or |= \"FAIL\"",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 12, "w": 24, "x": 0, "y": 8}
+      },
+      {
+        "id": 4,
+        "title": "Auto-Fix Success Rate",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "sum by (fixApplied) (troubleshoot_reports_total)",
+            "legendFormat": "{{fixApplied}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20}
+      },
+      {
+        "id": 5,
+        "title": "Pipeline Error Types Distribution",
+        "type": "bargraph",
+        "targets": [
+          {
+            "expr": "sum by (failureType) (troubleshoot_reports_total)",
+            "legendFormat": "{{failureType}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20}
+      },
+      {
+        "id": 6,
+        "title": "Real-time Pipeline Logs",
+        "type": "logs",
+        "targets": [
+          {
+            "expr": "{job=\"regression-tests\"} or {job=\"pipeline-troubleshooter\"}",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showTime": true,
+          "showLabels": true,
+          "sortOrder": "Descending"
+        },
+        "gridPos": {"h": 12, "w": 24, "x": 0, "y": 28}
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "10s",
+    "annotations": {
+      "list": [
+        {
+          "name": "Pipeline Failures",
+          "datasource": "Loki",
+          "expr": "{job=\"pipeline-troubleshooter\"} |= \"failure\"",
+          "iconColor": "red"
+        },
+        {
+          "name": "Auto-Fixes Applied",
+          "datasource": "Loki", 
+          "expr": "{job=\"pipeline-troubleshooter\"} |= \"fixApplied\":true",
+          "iconColor": "green"
+        }
+      ]
+    }
+  }
+}

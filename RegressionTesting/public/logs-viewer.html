@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Regression Test Logs</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: #1f1f1f;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+        }
+        .header {
+            background-color: #2d2d2d;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .log-container {
+            background-color: #2d2d2d;
+            padding: 20px;
+            border-radius: 5px;
+            max-height: 80vh;
+            overflow-y: auto;
+            border: 1px solid #444;
+        }
+        .log-entry {
+            margin-bottom: 10px;
+            padding: 8px;
+            border-left: 3px solid #00ff00;
+            background-color: rgba(0, 255, 0, 0.1);
+            word-wrap: break-word;
+        }
+        .log-error {
+            border-left-color: #ff0000;
+            background-color: rgba(255, 0, 0, 0.1);
+        }
+        .log-warning {
+            border-left-color: #ffaa00;
+            background-color: rgba(255, 170, 0, 0.1);
+        }
+        .timestamp {
+            color: #888;
+            font-size: 0.9em;
+        }
+        .refresh-btn {
+            background-color: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-bottom: 15px;
+        }
+        .refresh-btn:hover {
+            background-color: #005a9e;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔍 Regression Test Logs Dashboard</h1>
+        <button class="refresh-btn" onclick="loadLogs()">🔄 Refresh Logs</button>
+        <span id="lastUpdate" class="timestamp"></span>
+    </div>
+    
+    <div id="logContainer" class="log-container">
+        <p>Loading logs...</p>
+    </div>
+
+    <script>
+        async function loadLogs() {
+            try {
+                document.getElementById('logContainer').innerHTML = '<p>Loading logs...</p>';
+                
+                // Try to fetch from local API first
+                const response = await fetch('http://172.22.160.1:3001/api/logs/latest?limit=50');
+                const data = await response.json();
+                
+                if (data.logs && data.logs.length > 0) {
+                    displayLogs(data.logs.reverse()); // Show newest first
+                } else {
+                    document.getElementById('logContainer').innerHTML = '<p>No logs found.</p>';
+                }
+                
+                document.getElementById('lastUpdate').textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+            } catch (error) {
+                console.error('Error loading logs:', error);
+                document.getElementById('logContainer').innerHTML = 
+                    `<div class="log-entry log-error">
+                        <strong>Error loading logs:</strong> ${error.message}<br>
+                        <small>Make sure your log API server is running on http://172.22.160.1:3001</small>
+                    </div>`;
+            }
+        }
+
+        function displayLogs(logs) {
+            const container = document.getElementById('logContainer');
+            let html = '';
+            
+            logs.forEach(log => {
+                const logClass = log.level === 'error' ? 'log-error' : 
+                               log.level === 'warn' ? 'log-warning' : '';
+                
+                html += `
+                    <div class="log-entry ${logClass}">
+                        <div class="timestamp">${new Date(log.timestamp).toLocaleString()}</div>
+                        <strong>[${log.level.toUpperCase()}]</strong> ${log.message}
+                        ${log.screenshot ? `<br><em>📸 Screenshot: ${log.screenshot.filename}</em>` : ''}
+                        ${log.service ? `<br><em>Service: ${log.service}</em>` : ''}
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html || '<p>No logs to display.</p>';
+        }
+
+        // Auto-refresh every 30 seconds
+        setInterval(loadLogs, 30000);
+        
+        // Load logs on page load
+        loadLogs();
+    </script>
+</body>
+</html>

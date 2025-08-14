@@ -1,0 +1,143 @@
+name: Regression Tests CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/regression-tests
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: RegressionTesting/package.json
+    
+    - name: Install dependencies
+      run: |
+        cd RegressionTesting
+        npm install
+    
+    - name: Setup Chrome
+      uses: browser-actions/setup-chrome@v1
+    
+    - name: Run regression tests
+      run: |
+        cd RegressionTesting
+        npm test
+      env:
+        HEADLESS: true
+    
+    - name: Upload test artifacts
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results
+        path: |
+          RegressionTesting/screenshots/
+          RegressionTesting/logs/
+          RegressionTesting/reports/
+        retention-days: 30
+
+  build-and-deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Login to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=sha,prefix=commit-
+          type=raw,value=latest,enable={{is_default_branch}}
+    
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./RegressionTesting
+        file: ./RegressionTesting/Dockerfile
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+    
+    - name: Configure kubectl
+      run: |
+        mkdir -p $HOME/.kube
+        echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+    
+    - name: Deploy to Kubernetes
+      run: |
+        # Update deployment with new image
+        kubectl set image deployment/regression-test-deployment regression-test=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} -n regression-testing
+        
+        # Wait for rollout to complete
+        kubectl rollout status deployment/regression-test-deployment -n regression-testing --timeout=300s
+        
+        # Verify deployment
+        kubectl get pods -n regression-testing -l app=regression-test
+    
+    - name: Run post-deployment tests
+      run: |
+        # Wait for pod to be ready
+        kubectl wait --for=condition=ready pod -l app=regression-test -n regression-testing --timeout=180s
+        
+        # Get pod name and check logs
+        POD_NAME=$(kubectl get pods -n regression-testing -l app=regression-test -o jsonpath='{.items[0].metadata.name}')
+        echo "Deployed pod: $POD_NAME"
+        
+        # Show recent logs
+        kubectl logs $POD_NAME -n regression-testing --tail=50
+
+  notify:
+    needs: [test, build-and-deploy]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Notify deployment status
+      run: |
+        if [ "${{ needs.test.result }}" == "success" ] && [ "${{ needs.build-and-deploy.result }}" == "success" ]; then
+          echo "✅ Pipeline completed successfully"
+          echo "🚀 Regression tests deployed to Kubernetes"
+          echo "📊 View logs in Grafana dashboard"
+        else
+          echo "❌ Pipeline failed"
+          echo "Test result: ${{ needs.test.result }}"
+          echo "Deploy result: ${{ needs.build-and-deploy.result }}"
+        fi

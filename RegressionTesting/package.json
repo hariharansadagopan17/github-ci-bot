@@ -1,0 +1,99 @@
+{
+  "name": "regression-testing-framework",
+  "version": "1.0.0",
+  "description": "Automated regression testing framework with Cucumber, Selenium, Kubernetes, and Grafana integration",
+  "main": "index.js",
+  "scripts": {
+    "test": "cucumber-js",
+    "test:headless": "cross-env HEADLESS=true cucumber-js",
+    "test:chrome": "cross-env HEADLESS=false cucumber-js",
+    "test:smoke": "cross-env cucumber-js --tags @smoke",
+    "test:login": "cross-env cucumber-js --tags @login",
+    "test:docker": "docker run --rm -v $(pwd):/app regression-test-framework",
+    "test:runner": "node test-runner.js",
+    "build:docker": "docker build -t regression-test-framework .",
+    "install:dependencies": "npm install",
+    "lint": "eslint . --ext .js",
+    "lint:fix": "eslint . --ext .js --fix",
+    "setup": "node -e \"require('fs').mkdirSync('reports', {recursive: true}); require('fs').mkdirSync('screenshots', {recursive: true}); require('fs').mkdirSync('logs', {recursive: true}); console.log('Directories created successfully');\"",
+    "troubleshoot": "node troubleshoot.js",
+    "server": "node server.js",
+    "quick-test": "node quick-test.js",
+    "test:with-server": "concurrently \"npm run server\" \"wait-on http://localhost:3000 && npm test\" --kill-others --success first",
+    "docker:build": "docker build -t regression-test-framework .",
+    "docker:run": "docker run --rm regression-test-framework",
+    "docker:test": "docker run --rm -v %cd%/reports:/app/reports -v %cd%/screenshots:/app/screenshots regression-test-framework",
+    "docker:debug": "docker run -it --rm regression-test-framework /bin/bash",
+    "docker:clean": "docker system prune -f",
+    "k8s:deploy-monitoring": "kubectl apply -f k8s/monitoring-stack.yaml",
+    "k8s:deploy-tests": "kubectl apply -f k8s/regression-test-deployment.yaml",
+    "k8s:deploy-all": "npm run k8s:deploy-monitoring && npm run k8s:deploy-tests",
+    "k8s:status": "kubectl get all -n monitoring && kubectl get all -n regression-testing",
+    "k8s:grafana": "kubectl port-forward svc/grafana 3000:3000 -n monitoring",
+    "k8s:logs": "kubectl logs -l app=regression-test -n regression-testing",
+    "k8s:cleanup": "kubectl delete -f k8s/ --ignore-not-found=true",
+    "k8s:validate": "node k8s-setup-validator.js",
+    "pipeline:troubleshoot": "node pipeline-troubleshooter.js check",
+    "pipeline:monitor": "node pipeline-troubleshooter.js monitor",
+    "pipeline:dashboard": "node pipeline-monitor-dashboard-simple.js",
+    "pipeline:fix": "node pipeline-troubleshooter.js check && git add . && git commit -m 'fix: automated pipeline fixes' && git push"
+  },
+  "keywords": [
+    "regression",
+    "testing",
+    "cucumber",
+    "selenium",
+    "automation",
+    "kubernetes",
+    "grafana"
+  ],
+  "author": "Automation Team",
+  "license": "MIT",
+  "dependencies": {
+    "@cucumber/cucumber": "^10.0.1",
+    "@octokit/rest": "^22.0.0",
+    "axios": "^1.11.0",
+    "chai": "^4.3.10",
+    "chai-as-promised": "^7.1.1",
+    "chalk": "^5.5.0",
+    "chromedriver": "^119.0.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.21.2",
+    "fs-extra": "^11.1.1",
+    "moment": "^2.29.4",
+    "node-fetch": "^3.3.2",
+    "prom-client": "^15.0.0",
+    "selenium-webdriver": "^4.15.0",
+    "webdriver-manager": "^12.1.8",
+    "winston": "^3.17.0",
+    "winston-elasticsearch": "^0.17.4"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "eslint": "^8.54.0",
+    "nodemon": "^3.0.1",
+    "prettier": "^3.1.0",
+    "wait-on": "^7.2.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "cucumber": {
+    "default": {
+      "require": [
+        "features/step_definitions/*.js",
+        "features/support/*.js"
+      ],
+      "format": [
+        "pretty",
+        "json:reports/cucumber-report.json",
+        "html:reports/cucumber-report.html"
+      ],
+      "paths": [
+        "features/*.feature"
+      ]
+    }
+  }
+}

@@ -1,0 +1,145 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background-color: #f8f9fa; }
+    .header { background-color: #007bff; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; }
+    .container { max-width: 1200px; margin: 20px auto; padding: 0 20px; }
+    .welcome-message { font-size: 24px; color: #333; margin-bottom: 30px; }
+    .card { background: white; padding: 20px; margin: 15px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .card h3 { margin-top: 0; color: #007bff; }
+    button { padding: 10px 20px; background-color: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background-color: #c82333; }
+    .user-info { background-color: #e9ecef; padding: 10px; border-radius: 4px; margin: 15px 0; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0; }
+    .stat-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; text-align: center; }
+    .stat-number { font-size: 2em; font-weight: bold; }
+    .menu { list-style: none; padding: 0; }
+    .menu li { padding: 10px; border-bottom: 1px solid #eee; }
+    .menu li:hover { background-color: #f8f9fa; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h2>Test Dashboard</h2>
+    <button id="logout-button" onclick="logout()">Logout</button>
+  </div>
+  
+  <div class="container">
+    <div class="welcome-message">Welcome to the dashboard!</div>
+    
+    <div class="user-info">
+      <strong>User:</strong> <span id="current-user">testuser@example.com</span><br>
+      <strong>Login Time:</strong> <span id="login-time"></span><br>
+      <strong>Session ID:</strong> <span id="session-id"></span>
+    </div>
+    
+    <div class="stats">
+      <div class="stat-card">
+        <div class="stat-number">42</div>
+        <div>Total Tests</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">38</div>
+        <div>Tests Passed</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">4</div>
+        <div>Tests Failed</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">95%</div>
+        <div>Success Rate</div>
+      </div>
+    </div>
+    
+    <div class="card">
+      <h3>Quick Actions</h3>
+      <ul class="menu">
+        <li onclick="runTests()">🧪 Run New Test Suite</li>
+        <li onclick="viewReports()">📊 View Test Reports</li>
+        <li onclick="manageUsers()">👥 Manage Users</li>
+        <li onclick="systemSettings()">⚙️ System Settings</li>
+        <li onclick="viewLogs()">📝 View Logs</li>
+      </ul>
+    </div>
+    
+    <div class="card">
+      <h3>Recent Activity</h3>
+      <div id="activity-log">
+        <p>• Regression test completed - 2 minutes ago</p>
+        <p>• New test case added - 15 minutes ago</p>
+        <p>• System backup completed - 1 hour ago</p>
+        <p>• User logged in - Just now</p>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    function logout() {
+      // Clear remember me if it was set
+      localStorage.removeItem('rememberUser');
+      
+      // Add logout confirmation
+      if (confirm('Are you sure you want to logout?')) {
+        window.location.href = '/login.html';
+      }
+    }
+    
+    function runTests() {
+      alert('Running test suite... This is a demo action.');
+    }
+    
+    function viewReports() {
+      alert('Opening test reports... This is a demo action.');
+    }
+    
+    function manageUsers() {
+      alert('Opening user management... This is a demo action.');
+    }
+    
+    function systemSettings() {
+      alert('Opening system settings... This is a demo action.');
+    }
+    
+    function viewLogs() {
+      alert('Opening system logs... This is a demo action.');
+    }
+    
+    // Initialize dashboard
+    window.onload = function() {
+      // Set current time
+      document.getElementById('login-time').textContent = new Date().toLocaleString();
+      
+      // Generate random session ID
+      document.getElementById('session-id').textContent = 'sess_' + Math.random().toString(36).substr(2, 9);
+      
+      // Update activity log every 30 seconds
+      setInterval(updateActivity, 30000);
+    };
+    
+    function updateActivity() {
+      const activities = [
+        'New test execution started',
+        'Performance metrics updated', 
+        'Error log analyzed',
+        'System health check completed',
+        'Database backup initiated'
+      ];
+      
+      const randomActivity = activities[Math.floor(Math.random() * activities.length)];
+      const activityLog = document.getElementById('activity-log');
+      const newActivity = document.createElement('p');
+      newActivity.textContent = '• ' + randomActivity + ' - Just now';
+      activityLog.insertBefore(newActivity, activityLog.firstChild);
+      
+      // Keep only last 5 activities
+      while (activityLog.children.length > 5) {
+        activityLog.removeChild(activityLog.lastChild);
+      }
+    }
+  </script>
+</body>
+</html>

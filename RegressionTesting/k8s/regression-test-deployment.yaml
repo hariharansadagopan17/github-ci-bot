@@ -1,0 +1,302 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: regression-testing
+  labels:
+    name: regression-testing
+    purpose: automated-testing
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: regression-test-config
+  namespace: regression-testing
+data:
+  BASE_URL: "http://app-service:3000"
+  LOGIN_URL: "http://app-service:3000/login"
+  TEST_ENV: "kubernetes"
+  HEADLESS: "true"
+  BROWSER_TIMEOUT: "30000"
+  IMPLICIT_WAIT: "10000"
+  ELASTICSEARCH_HOST: "http://elasticsearch:9200"
+  ELASTICSEARCH_INDEX: "regression-test-logs"
+  METRICS_PORT: "9090"
+  REPORT_PATH: "/app/reports"
+  SCREENSHOT_PATH: "/app/screenshots"
+  CI: "true"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: regression-test-secrets
+  namespace: regression-testing
+type: Opaque
+data:
+  # Base64 encoded values (echo -n 'value' | base64)
+  TEST_USERNAME: dGVzdHVzZXJAZXhhbXBsZS5jb20=  # testuser@example.com
+  TEST_PASSWORD: dGVzdHBhc3N3b3JkMTIz  # testpassword123
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: regression-reports-pvc
+  namespace: regression-testing
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: regression-screenshots-pvc
+  namespace: regression-testing
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: regression-test-deployment
+  namespace: regression-testing
+  labels:
+    app: regression-test
+    version: v1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: regression-test
+  template:
+    metadata:
+      labels:
+        app: regression-test
+        version: v1
+    spec:
+      containers:
+      - name: regression-test
+        image: ghcr.io/hariharansadagopan17/github-ci-bot/regression-tests:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 9090
+          name: metrics
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: BUILD_NUMBER
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['build.number']
+        - name: GIT_BRANCH
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['git.branch']
+        - name: GIT_COMMIT
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['git.commit']
+        envFrom:
+        - configMapRef:
+            name: regression-test-config
+        - secretRef:
+            name: regression-test-secrets
+        volumeMounts:
+        - name: reports-volume
+          mountPath: /app/reports
+        - name: screenshots-volume
+          mountPath: /app/screenshots
+        - name: shm-volume
+          mountPath: /dev/shm
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 9090
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 9090
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        securityContext:
+          runAsNonRoot: false
+          runAsUser: 0
+          capabilities:
+            add:
+              - SYS_ADMIN
+      volumes:
+      - name: reports-volume
+        persistentVolumeClaim:
+          claimName: regression-reports-pvc
+      - name: screenshots-volume
+        persistentVolumeClaim:
+          claimName: regression-screenshots-pvc
+      - name: shm-volume
+        emptyDir:
+          medium: Memory
+          sizeLimit: 2Gi
+      restartPolicy: Always
+      dnsPolicy: ClusterFirst
+      serviceAccountName: default
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: regression-test-service
+  namespace: regression-testing
+  labels:
+    app: regression-test
+spec:
+  selector:
+    app: regression-test
+  ports:
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: regression-test-job
+  namespace: regression-testing
+  labels:
+    app: regression-test-job
+spec:
+  ttlSecondsAfterFinished: 3600  # Clean up job after 1 hour
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app: regression-test-job
+    spec:
+      containers:
+      - name: regression-test
+        image: regression-test-framework:latest
+        imagePullPolicy: Always
+        command: ["./run-tests.sh", "npm", "test"]
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: JOB_TYPE
+          value: "regression-test"
+        envFrom:
+        - configMapRef:
+            name: regression-test-config
+        - secretRef:
+            name: regression-test-secrets
+        volumeMounts:
+        - name: reports-volume
+          mountPath: /app/reports
+        - name: screenshots-volume
+          mountPath: /app/screenshots
+        - name: shm-volume
+          mountPath: /dev/shm
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        securityContext:
+          runAsNonRoot: false
+          runAsUser: 0
+          capabilities:
+            add:
+              - SYS_ADMIN
+      volumes:
+      - name: reports-volume
+        persistentVolumeClaim:
+          claimName: regression-reports-pvc
+      - name: screenshots-volume
+        persistentVolumeClaim:
+          claimName: regression-screenshots-pvc
+      - name: shm-volume
+        emptyDir:
+          medium: Memory
+          sizeLimit: 2Gi
+      restartPolicy: Never
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: regression-test-cronjob
+  namespace: regression-testing
+spec:
+  schedule: "0 2 * * *"  # Run daily at 2 AM
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 7200  # Clean up job after 2 hours
+      template:
+        spec:
+          containers:
+          - name: regression-test
+            image: regression-test-framework:latest
+            imagePullPolicy: Always
+            command: ["./run-tests.sh", "npm", "test"]
+            env:
+            - name: NODE_ENV
+              value: "production"
+            - name: JOB_TYPE
+              value: "scheduled-regression-test"
+            envFrom:
+            - configMapRef:
+                name: regression-test-config
+            - secretRef:
+                name: regression-test-secrets
+            volumeMounts:
+            - name: reports-volume
+              mountPath: /app/reports
+            - name: screenshots-volume
+              mountPath: /app/screenshots
+            - name: shm-volume
+              mountPath: /dev/shm
+            resources:
+              requests:
+                memory: "1Gi"
+                cpu: "500m"
+              limits:
+                memory: "4Gi"
+                cpu: "2000m"
+          volumes:
+          - name: reports-volume
+            persistentVolumeClaim:
+              claimName: regression-reports-pvc
+          - name: screenshots-volume
+            persistentVolumeClaim:
+              claimName: regression-screenshots-pvc
+          - name: shm-volume
+            emptyDir:
+              medium: Memory
+              sizeLimit: 2Gi
+          restartPolicy: Never

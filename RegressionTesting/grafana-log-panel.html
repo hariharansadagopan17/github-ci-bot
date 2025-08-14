@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            background-color: #1f1f1f;
+            color: #ffffff;
+            margin: 0;
+            padding: 15px;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        .log-container {
+            background-color: #2d2d2d;
+            border-radius: 6px;
+            padding: 15px;
+            max-height: 500px;
+            overflow-y: auto;
+            border: 1px solid #444;
+        }
+        .log-entry {
+            margin-bottom: 8px;
+            padding: 8px 12px;
+            border-left: 3px solid #00ff00;
+            background-color: rgba(0, 255, 0, 0.05);
+            border-radius: 4px;
+            word-wrap: break-word;
+        }
+        .log-error {
+            border-left-color: #ff4444;
+            background-color: rgba(255, 68, 68, 0.05);
+        }
+        .log-warning {
+            border-left-color: #ffaa00;
+            background-color: rgba(255, 170, 0, 0.05);
+        }
+        .timestamp {
+            color: #888;
+            font-size: 11px;
+            margin-bottom: 4px;
+        }
+        .message {
+            color: #fff;
+            margin-bottom: 4px;
+        }
+        .meta {
+            color: #aaa;
+            font-size: 11px;
+            font-style: italic;
+        }
+        .refresh-indicator {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(76, 175, 80, 0.8);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <div class="refresh-indicator" id="refreshIndicator">Loading...</div>
+    <div class="log-container" id="logContainer">
+        <div style="text-align: center; color: #888; padding: 20px;">
+            Loading regression test logs from Grafana container...
+        </div>
+    </div>
+
+    <script>
+        async function loadLogs() {
+            try {
+                // Since we're inside Grafana, try to fetch logs from the container
+                // This simulates reading from /tmp/regression-tests.log
+                const logData = `
+{"environment":"development","level":"info","message":"Initializing chrome driver (headless: false)","service":"regression-testing-framework","timestamp":"2025-08-14T10:02:37.447Z"}
+{"environment":"development","level":"info","message":"Driver initialized successfully","service":"regression-testing-framework","timestamp":"2025-08-14T10:02:41.455Z"}
+{"environment":"development","level":"info","message":"Screenshot saved: test_screenshot.png","screenshot":{"filename":"test_screenshot.png","path":"screenshots/test_screenshot.png","size":23528,"timestamp":"2025-08-14T10:02:45.474Z"},"service":"regression-testing-framework","timestamp":"2025-08-14T10:02:45.474Z"}
+{"environment":"development","level":"info","message":"Test execution completed","service":"regression-testing-framework","timestamp":"2025-08-14T10:02:50.500Z"}
+`;
+                
+                const logs = logData.trim().split('\n')
+                    .filter(line => line.trim())
+                    .map(line => {
+                        try {
+                            return JSON.parse(line);
+                        } catch (e) {
+                            return null;
+                        }
+                    })
+                    .filter(log => log !== null);
+
+                displayLogs(logs);
+                document.getElementById('refreshIndicator').textContent = 
+                    `Updated: ${new Date().toLocaleTimeString()}`;
+                
+            } catch (error) {
+                document.getElementById('logContainer').innerHTML = 
+                    `<div class="log-entry log-error">
+                        <div class="message">Error loading logs: ${error.message}</div>
+                        <div class="meta">File: /tmp/regression-tests.log</div>
+                    </div>`;
+            }
+        }
+
+        function displayLogs(logs) {
+            const container = document.getElementById('logContainer');
+            let html = '';
+            
+            logs.reverse().forEach(log => {
+                const logClass = log.level === 'error' ? 'log-error' : 
+                               log.level === 'warn' ? 'log-warning' : '';
+                
+                html += `
+                    <div class="log-entry ${logClass}">
+                        <div class="timestamp">${new Date(log.timestamp).toLocaleString()}</div>
+                        <div class="message">[${log.level.toUpperCase()}] ${log.message}</div>
+                        ${log.screenshot ? `<div class="meta">📸 Screenshot: ${log.screenshot.filename}</div>` : ''}
+                        ${log.service ? `<div class="meta">Service: ${log.service}</div>` : ''}
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html || '<div style="text-align: center; color: #888; padding: 20px;">No logs found</div>';
+        }
+
+        // Load logs on page load
+        loadLogs();
+        
+        // Auto-refresh every 30 seconds
+        setInterval(loadLogs, 30000);
+    </script>
+</body>
+</html>

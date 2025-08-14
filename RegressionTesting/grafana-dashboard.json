@@ -1,0 +1,78 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Regression Testing Dashboard",
+    "description": "Dashboard for monitoring regression test execution and logs",
+    "tags": ["regression", "testing", "automation"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Latest Test Logs",
+        "type": "table",
+        "targets": [
+          {
+            "target": "regression_test_logs",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 12,
+          "w": 24,
+          "x": 0,
+          "y": 0
+        },
+        "options": {
+          "showHeader": true
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "auto",
+              "displayMode": "auto"
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Test Execution Timeline",
+        "type": "timeseries",
+        "targets": [
+          {
+            "target": "regression_test_logs",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 12
+        }
+      },
+      {
+        "id": 3,
+        "title": "Test Summary",
+        "type": "stat",
+        "targets": [
+          {
+            "target": "test_count",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 12
+        }
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "10s"
+  }
+}
