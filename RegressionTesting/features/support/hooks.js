@@ -28,25 +28,47 @@ BeforeAll(async function () {
     logger.info('Test suite initialization completed');
 });
 
-Before(async function (scenario) {
+Before({ timeout: 120000 }, async function (scenario) {
     logger.info(`Starting scenario: ${scenario.pickle.name}`);
     
     // Record test start metrics
     metricsCollector.recordTestStart(scenario.pickle.name);
     
     try {
-        // Get a fresh driver instance for each scenario
-        this.driver = await driverManager.getDriver();
-        this.scenario = scenario;
+        // Get a fresh driver instance for each scenario with retries
+        let retryCount = 0;
+        const maxRetries = 3;
         
-        logger.info(`Driver initialized for scenario: ${scenario.pickle.name}`);
+        while (retryCount < maxRetries) {
+            try {
+                this.driver = await driverManager.getDriver();
+                this.scenario = scenario;
+                
+                // Test driver responsiveness
+                await this.driver.getTitle();
+                logger.info(`Driver initialized successfully for scenario: ${scenario.pickle.name}`);
+                break;
+                
+            } catch (driverError) {
+                retryCount++;
+                logger.warn(`Driver initialization attempt ${retryCount} failed for ${scenario.pickle.name}:`, driverError.message);
+                
+                if (retryCount >= maxRetries) {
+                    throw driverError;
+                }
+                
+                // Wait before retry
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+        }
+        
     } catch (error) {
         logger.error(`Failed to initialize driver for scenario ${scenario.pickle.name}:`, error);
         throw error;
     }
 });
 
-After(async function (scenario) {
+After({ timeout: 120000 }, async function (scenario) {
     const scenarioName = scenario.pickle.name;
     const isFailure = scenario.result.status === 'FAILED';
     
@@ -76,11 +98,13 @@ After(async function (scenario) {
                 logger.warn(`Cannot take failure screenshot for ${scenarioName}: Driver not available`);
             }
             
-            // Record failure metrics
-            metricsCollector.recordTestFailure(scenarioName, scenario.result.exception);
+            // Record failure metrics with safe duration calculation
+            const duration = scenario.result.duration ? scenario.result.duration.seconds || 0 : 0;
+            metricsCollector.recordTestFailure(scenarioName, scenario.result.exception, duration);
         } else {
             logger.info(`Scenario passed: ${scenarioName}`);
-            metricsCollector.recordTestSuccess(scenarioName);
+            const duration = scenario.result.duration ? scenario.result.duration.seconds || 0 : 0;
+            metricsCollector.recordTestSuccess(scenarioName, duration);
         }
         
         // Capture browser logs if available
@@ -111,8 +135,8 @@ After(async function (scenario) {
         }
     }
     
-    // Record test completion metrics
-    const duration = scenario.result.duration || 0;
+    // Record test completion metrics with safe duration calculation
+    const duration = scenario.result.duration ? scenario.result.duration.seconds || 0 : 0;
     metricsCollector.recordTestCompletion(scenarioName, duration, isFailure);
 });
 

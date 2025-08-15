@@ -22,16 +22,14 @@ class DriverManager {
             const builder = new Builder();
             let driver;
             
-            switch (this.browserName.toLowerCase()) {
-                case 'chrome':
-                    driver = await this.createChromeDriver(builder);
-                    break;
-                case 'firefox':
-                    driver = await this.createFirefoxDriver(builder);
-                    break;
-                default:
-                    throw new Error(`Unsupported browser: ${this.browserName}`);
-            }
+            // Set a timeout for driver initialization
+            const driverPromise = this.createDriverWithTimeout();
+            driver = await Promise.race([
+                driverPromise,
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Driver initialization timeout after 30 seconds')), 30000)
+                )
+            ]);
 
             // Set timeouts
             await driver.manage().setTimeouts({
@@ -42,7 +40,11 @@ class DriverManager {
 
             // Maximize window if not headless
             if (!this.headless) {
-                await driver.manage().window().maximize();
+                try {
+                    await driver.manage().window().maximize();
+                } catch (windowError) {
+                    logger.warn('Failed to maximize window:', windowError.message);
+                }
             }
 
             logger.info('Driver initialized successfully');
@@ -55,6 +57,19 @@ class DriverManager {
                 this.driver = null;
             }
             throw error;
+        }
+    }
+
+    async createDriverWithTimeout() {
+        const builder = new Builder();
+        
+        switch (this.browserName.toLowerCase()) {
+            case 'chrome':
+                return await this.createChromeDriver(builder);
+            case 'firefox':
+                return await this.createFirefoxDriver(builder);
+            default:
+                throw new Error(`Unsupported browser: ${this.browserName}`);
         }
     }
 

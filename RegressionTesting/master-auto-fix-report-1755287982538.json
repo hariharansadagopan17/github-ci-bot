@@ -1,0 +1,50 @@
+{
+  "timestamp": "2025-08-15T19:59:42.538Z",
+  "isRunning": false,
+  "systems": {
+    "intelligentFixer": true,
+    "grafanaMonitor": true,
+    "pipelineWatcher": true
+  },
+  "stats": {
+    "totalFixes": 5,
+    "successfulFixes": 5,
+    "failedFixes": 0,
+    "pipelineReruns": 0,
+    "lastHealthCheck": {
+      "timestamp": "2025-08-15T19:59:23.405Z",
+      "github": true,
+      "docker": false,
+      "loki": true,
+      "grafana": false,
+      "regression": true,
+      "regressionErrors": {
+        "hasErrors": false,
+        "errorCount": 0,
+        "streams": [],
+        "executionTime": 0.024712
+      }
+    },
+    "regressionErrors": 0,
+    "lokiQueries": 4,
+    "lastLokiQuery": "2025-08-15T19:59:24.787Z"
+  },
+  "fixQueue": {
+    "length": 0,
+    "pending": []
+  },
+  "lastHealthCheck": {
+    "timestamp": "2025-08-15T19:59:23.405Z",
+    "github": true,
+    "docker": false,
+    "loki": true,
+    "grafana": false,
+    "regression": true,
+    "regressionErrors": {
+      "hasErrors": false,
+      "errorCount": 0,
+      "streams": [],
+      "executionTime": 0.024712
+    }
+  }
+}

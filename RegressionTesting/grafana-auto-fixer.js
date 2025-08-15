@@ -7,13 +7,15 @@
 
 const axios = require('axios');
 const WebSocket = require('ws');
+const LokiUrlBuilder = require('./loki-url-builder');
 
 class GrafanaLogMonitor {
     constructor() {
         this.grafanaUrl = process.env.GRAFANA_URL || 'https://79a151442637.ngrok-free.app';
         this.grafanaUser = process.env.GRAFANA_USER || 'admin';
         this.grafanaPass = process.env.GRAFANA_PASS || 'admin123';
-        this.lokiUrl = process.env.LOKI_URL || 'http://localhost:3100';
+                this.lokiUrl = 'http://localhost:3101';
+        this.urlBuilder = new LokiUrlBuilder(this.lokiUrl);
         
         this.autoFixer = null;
         this.monitoring = false;
@@ -62,7 +64,9 @@ class GrafanaLogMonitor {
 
     async testLokiConnection() {
         try {
-            const response = await axios.get(`${this.lokiUrl}/ready`, { timeout: 5000 });
+            const readyUrl = this.urlBuilder.buildAxiosUrl('ready');
+            console.log(`🔍 Testing connection to: ${readyUrl}`);
+            const response = await axios.get(readyUrl, { timeout: 5000 });
             console.log('✅ Loki connection successful');
         } catch (error) {
             console.log('⚠️  Loki direct connection failed, will try through WSL');
@@ -89,10 +93,10 @@ class GrafanaLogMonitor {
             try {
                 // Query for recent error and failure logs
                 const queries = [
-                    '{job="regression-tests"} |= "error" or "failed" or "Error" or "Failed"',
-                    '{job="pipeline"} |= "failed" or "error"',
-                    '{job="docker"} |= "failed" or "error"',
-                    '{source="github_actions"} |= "failed" or "error"'
+                    '{job="regression-tests"} |~ "(?i)(error|failed)"',
+                    '{job="pipeline"} |~ "(?i)(error|failed)"',
+                    '{job="docker"} |~ "(?i)(error|failed)"',
+                    '{source="github_actions"} |~ "(?i)(error|failed)"'
                 ];
                 
                 for (const query of queries) {
@@ -122,7 +126,7 @@ class GrafanaLogMonitor {
                 const response = await axios.post(`${this.grafanaUrl}/api/ds/query`, {
                     queries: [{
                         refId: 'A',
-                        expr: 'rate({job="regression-tests"}[5m])',
+                        expr: 'sum(rate({job="regression-tests"}[5m]))',
                         format: 'table',
                         instant: true
                     }]
@@ -211,9 +215,11 @@ class GrafanaLogMonitor {
             
             let response;
             
-            // Try direct Loki connection first
+            // Try direct Loki connection first using URL builder
             try {
-                response = await axios.get(`${this.lokiUrl}/loki/api/v1/query_range`, {
+                const queryUrl = this.urlBuilder.buildAxiosUrl();
+                console.log(`🔍 Direct query URL: ${queryUrl}`);
+                response = await axios.get(queryUrl, {
                     params: {
                         query: query,
                         start: start * 1000000, // Convert to nanoseconds
@@ -228,9 +234,30 @@ class GrafanaLogMonitor {
                 const { promisify } = require('util');
                 const execAsync = promisify(exec);
                 
-                const curlCommand = `wsl -d Ubuntu-EDrive -e bash -c "curl -s '${this.lokiUrl}/loki/api/v1/query_range?query=${encodeURIComponent(query)}&start=${start}000000&end=${end}000000&limit=100'"`;
-                const { stdout } = await execAsync(curlCommand, { timeout: 10000 });
-                response = { data: JSON.parse(stdout) };
+                // Use centralized URL builder for WSL curl
+                const curlCommand = this.urlBuilder.buildCurlCommand(query, start, end);
+                const { stdout, stderr } = await execAsync(curlCommand, { timeout: 10000 });
+                
+                // Check if stdout is valid JSON before parsing
+                if (!stdout || stdout.trim() === '') {
+                    console.log('⚠️  Loki returned empty response');
+                    return [];
+                }
+                
+                // Check if response starts with error indicators
+                if (stdout.trim().startsWith('parse error') || 
+                    stdout.trim().startsWith('curl:') || 
+                    stdout.trim().startsWith('{"status":"error"}')) {
+                    console.log('⚠️  Loki query error:', stdout.trim());
+                    return [];
+                }
+                
+                try {
+                    response = { data: JSON.parse(stdout) };
+                } catch (parseError) {
+                    console.log('⚠️  Failed to parse Loki response:', stdout.substring(0, 100) + '...');
+                    return [];
+                }
             }
             
             const logs = [];

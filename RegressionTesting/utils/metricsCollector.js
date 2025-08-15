@@ -172,7 +172,9 @@ class MetricsCollector {
     }
 
     recordTestSuccess(scenarioName, duration = 0, browser = 'chrome', environment = process.env.TEST_ENV || 'development') {
-        const durationSeconds = duration / 1000;
+        // Ensure duration is a valid number
+        const validDuration = (typeof duration === 'number' && !isNaN(duration)) ? duration : 0;
+        const durationSeconds = validDuration / 1000;
         
         this.testCounter.inc({ scenario: scenarioName, status: 'success', environment, browser });
         this.testDuration.observe({ scenario: scenarioName, status: 'success', environment, browser }, durationSeconds);
@@ -191,7 +193,9 @@ class MetricsCollector {
     }
 
     recordTestFailure(scenarioName, error, duration = 0, browser = 'chrome', environment = process.env.TEST_ENV || 'development') {
-        const durationSeconds = duration / 1000;
+        // Ensure duration is a valid number
+        const validDuration = (typeof duration === 'number' && !isNaN(duration)) ? duration : 0;
+        const durationSeconds = validDuration / 1000;
         const errorType = error ? error.name || 'UnknownError' : 'TestFailure';
         
         this.testCounter.inc({ scenario: scenarioName, status: 'failure', environment, browser });

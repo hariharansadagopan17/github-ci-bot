@@ -1,0 +1,51 @@
+{
+  "timestamp": "2025-08-15T17:52:24.060Z",
+  "isRunning": false,
+  "systems": {
+    "intelligentFixer": true,
+    "grafanaMonitor": true,
+    "pipelineWatcher": true
+  },
+  "stats": {
+    "totalFixes": 27,
+    "successfulFixes": 25,
+    "failedFixes": 2,
+    "pipelineReruns": 0,
+    "lastHealthCheck": {
+      "timestamp": "2025-08-15T17:52:20.716Z",
+      "github": true,
+      "docker": false,
+      "loki": false,
+      "grafana": false,
+      "regression": true
+    }
+  },
+  "fixQueue": {
+    "length": 3,
+    "pending": [
+      {
+        "type": "health",
+        "service": "docker",
+        "priority": "high"
+      },
+      {
+        "type": "health",
+        "service": "loki",
+        "priority": "high"
+      },
+      {
+        "type": "health",
+        "service": "grafana",
+        "priority": "high"
+      }
+    ]
+  },
+  "lastHealthCheck": {
+    "timestamp": "2025-08-15T17:52:20.716Z",
+    "github": true,
+    "docker": false,
+    "loki": false,
+    "grafana": false,
+    "regression": true
+  }
+}

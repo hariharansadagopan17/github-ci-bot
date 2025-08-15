@@ -10,13 +10,15 @@ const path = require('path');
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const execAsync = promisify(exec);
+const LokiUrlBuilder = require('./loki-url-builder');
 
 class IntelligentAutoFixer {
     constructor() {
         this.githubToken = process.env.GITHUB_TOKEN;
         this.githubOwner = process.env.GITHUB_OWNER || 'hariharansadagopan17';
         this.githubRepo = process.env.GITHUB_REPO || 'github-ci-bot';
-        this.lokiUrl = process.env.LOKI_URL || 'http://localhost:3100';
+        this.lokiUrl = process.env.LOKI_URL || 'http://localhost:3101';
+        this.urlBuilder = new LokiUrlBuilder(this.lokiUrl);
         
         this.fixPatterns = [
             {
@@ -69,7 +71,7 @@ class IntelligentAutoFixer {
             },
             {
                 name: 'Loki Connection Fix',
-                pattern: /Failed to push logs to Loki|Connection refused.*3100|ECONNREFUSED.*localhost:3100/,
+                pattern: /Failed to push logs to Loki|Connection refused.*3101|ECONNREFUSED.*localhost:3101/,
                 description: 'Fixes Loki connection and log streaming issues',
                 severity: 'medium',
                 category: 'monitoring',
@@ -173,9 +175,11 @@ class IntelligentAutoFixer {
         const issues = [];
         
         try {
-            // Query Loki for recent error logs
+            // Query Loki for recent error logs using URL builder
             const query = '{job="regression-tests"} |= "error" | json | __error__=""';
-            const response = await fetch(`${this.lokiUrl}/loki/api/v1/query_range?query=${encodeURIComponent(query)}&start=${Date.now() - 300000}000000&end=${Date.now()}000000`);
+            const fullUrl = this.urlBuilder.buildFetchUrl(query, Date.now() - 300000, Date.now());
+            console.log(`🔍 Intelligent fixer querying: ${fullUrl.substring(0, 80)}...`);
+            const response = await fetch(fullUrl);
             
             if (response.ok) {
                 const data = await response.json();

@@ -10,6 +10,10 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const LokiUrlBuilder = require('./loki-url-builder');
 
 const execAsync = promisify(exec);
 
@@ -106,7 +110,8 @@ class PipelineTroubleshooter {
         
         this.owner = process.env.GITHUB_OWNER || 'hariharansadagopan17';
         this.repo = process.env.GITHUB_REPO || 'github-ci-bot';
-        this.lokiUrl = process.env.LOKI_URL || 'http://localhost:3100';
+        this.lokiUrl = process.env.LOKI_URL || 'http://localhost:3101';
+        this.urlBuilder = new LokiUrlBuilder(this.lokiUrl);
         
         this.logger = null; // Will be initialized after modules load
         
@@ -241,8 +246,9 @@ class PipelineTroubleshooter {
             const start = new Date(startTime).getTime() * 1000000; // Convert to nanoseconds
             const end = new Date(endTime).getTime() * 1000000;
             
-            const query = encodeURIComponent('{job="regression-tests"} |= "error" or |= "fail" or |= "ERROR" or |= "FAIL"');
-            const url = `${this.lokiUrl}/loki/api/v1/query_range?query=${query}&start=${start}&end=${end}&limit=100`;
+            const query = '{job="regression-tests"} |= "error" or |= "fail" or |= "ERROR" or |= "FAIL"';
+            const url = this.urlBuilder.buildAxiosUrl() + `?query=${encodeURIComponent(query)}&start=${start}&end=${end}&limit=100`;
+            console.log(`🔍 Pipeline troubleshooter querying: ${url.substring(0, 80)}...`);
             
             const response = await axios.get(url);
             return response.data;
@@ -529,7 +535,8 @@ class PipelineTroubleshooter {
                 }]
             };
 
-            await axios.post(`${this.lokiUrl}/loki/api/v1/push`, lokiData);
+            const pushUrl = this.urlBuilder.buildAxiosUrl('loki/api/v1/push');
+            await axios.post(pushUrl, lokiData);
         } catch (error) {
             this.logger.warn('Could not push report to Loki:', error.message);
         }
